@@ -34,6 +34,13 @@ from .core.document_manager import VectorDatabaseManager, DocumentProcessor
 from .core.prompt_injection import register_prompt_injections
 from .core.battle_report import BattleReportGenerator as BattleReportManager
 from .core.ai_character_builder import AICharacterBuilder
+from .core.story_engine import StoryEngine, TensionLevel, SceneMood
+from .core.npc_manager import NPCManager
+from .core.contextual_checks import ContextualCheckSystem
+from .core.enhanced_prompts import register_enhanced_prompts
+from .core.custom_rules import CustomRuleSystem
+from .core.intelligent_modeler import IntelligentRuleModeler
+from .core.intelligent_prompts import inject_intelligent_rule_system
 
 # 创建插件实例
 plugin = NekroPlugin(
@@ -110,9 +117,15 @@ vector_db = VectorDatabaseManager(
 )
 battle_report_manager = BattleReportManager(store)
 ai_character_builder = AICharacterBuilder(character_manager)
+story_engine = StoryEngine(store)
+npc_manager = NPCManager(store)
+check_system = ContextualCheckSystem(story_engine)
+custom_rules = CustomRuleSystem(store)
+rule_modeler = IntelligentRuleModeler(store, vector_db)
 
 # 注册提示词注入
 register_prompt_injections(plugin, character_manager, vector_db, store, config, battle_report_manager)
+register_enhanced_prompts(plugin, story_engine, custom_rules, rule_modeler)
 
 
 # ============ 文档上传沙盒方法 ============
@@ -1319,9 +1332,107 @@ session end  # 生成战报"""
         return
 
 
+# ============ 自定义规则沙盒方法 ============
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "define_rule", "定义自定义规则")
+async def define_rule(_ctx: AgentCtx, rule_name: str, description: str, examples: str = "") -> str:
+    try:
+        await custom_rules.define_custom_rule(_ctx.chat_key, rule_name, description, examples)
+        return f"✅ 规则已定义: {rule_name}"
+    except Exception as e:
+        return f"❌ 定义规则失败: {str(e)}"
+
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "define_attribute", "定义自定义属性")
+async def define_attribute(_ctx: AgentCtx, attr_name: str, attr_type: str, 
+                          default_value: str, description: str) -> str:
+    try:
+        await custom_rules.define_custom_attribute(_ctx.chat_key, attr_name, 
+                                                   attr_type, default_value, description)
+        return f"✅ 属性已定义: {attr_name} ({attr_type})"
+    except Exception as e:
+        return f"❌ 定义属性失败: {str(e)}"
+
+
+# ============ 智能剧情管理沙盒方法 ============
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "set_scene", "设置当前场景和氛围")
+async def set_scene(_ctx: AgentCtx, scene_name: str, mood: str = "mysterious") -> str:
+    try:
+        mood_map = {
+            "peaceful": SceneMood.PEACEFUL,
+            "mysterious": SceneMood.MYSTERIOUS,
+            "horror": SceneMood.HORROR,
+            "epic": SceneMood.EPIC,
+            "melancholy": SceneMood.MELANCHOLY
+        }
+        scene_mood = mood_map.get(mood.lower(), SceneMood.MYSTERIOUS)
+        await story_engine.set_scene(_ctx.chat_key, scene_name, scene_mood)
+        return f"✅ 场景已设置: {scene_name} ({scene_mood.value})"
+    except Exception as e:
+        return f"❌ 设置场景失败: {str(e)}"
+
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "set_tension", "调整剧情紧张度")
+async def set_tension(_ctx: AgentCtx, level: int) -> str:
+    try:
+        tension_levels = {
+            1: TensionLevel.CALM,
+            3: TensionLevel.CURIOUS,
+            5: TensionLevel.TENSE,
+            7: TensionLevel.DANGEROUS,
+            9: TensionLevel.CRITICAL
+        }
+        tension = tension_levels.get(level, TensionLevel.TENSE)
+        await story_engine.set_tension(_ctx.chat_key, tension)
+        return f"✅ 紧张度已调整至: {level}"
+    except Exception as e:
+        return f"❌ 调整紧张度失败: {str(e)}"
+
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "add_clue", "添加线索到剧情追踪")
+async def add_clue(_ctx: AgentCtx, clue: str) -> str:
+    try:
+        await story_engine.add_clue(_ctx.chat_key, clue)
+        return f"✅ 线索已记录: {clue}"
+    except Exception as e:
+        return f"❌ 记录线索失败: {str(e)}"
+
+
+# ============ NPC 管理沙盒方法 ============
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "create_npc", "创建 NPC")
+async def create_npc(_ctx: AgentCtx, npc_id: str, name: str, personality: str, 
+                    background: str, secrets: str = "") -> str:
+    try:
+        secret_list = [s.strip() for s in secrets.split("|") if s.strip()] if secrets else []
+        npc = await npc_manager.create_npc(_ctx.chat_key, npc_id, name, personality, background, secret_list)
+        return f"✅ NPC 已创建: {name}\n性格: {personality}\n背景: {background[:50]}..."
+    except Exception as e:
+        return f"❌ 创建 NPC 失败: {str(e)}"
+
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "npc_remember", "让 NPC 记住事件")
+async def npc_remember(_ctx: AgentCtx, npc_id: str, memory: str) -> str:
+    try:
+        await npc_manager.add_memory(_ctx.chat_key, npc_id, memory)
+        return f"✅ {npc_id} 已记住: {memory}"
+    except Exception as e:
+        return f"❌ 记录失败: {str(e)}"
+
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "update_npc_relationship", "更新 NPC 关系")
+async def update_npc_relationship(_ctx: AgentCtx, npc_id: str, target: str, change: int) -> str:
+    try:
+        await npc_manager.update_relationship(_ctx.chat_key, npc_id, target, change)
+        direction = "提升" if change > 0 else "下降"
+        return f"✅ {npc_id} 对 {target} 的好感度{direction} {abs(change)}"
+    except Exception as e:
+        return f"❌ 更新关系失败: {str(e)}"
+
+
 # ============ 清理方法 ============
 
 @plugin.mount_cleanup_method()
 async def clean_up():
-    """清理插件资源"""
     pass
