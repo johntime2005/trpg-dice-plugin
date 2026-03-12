@@ -20,10 +20,10 @@ from nonebot.params import CommandArg
 from pydantic import BaseModel, Field
 
 from nonebot import on_command
-from nekro_agent.adapters.onebot_v11.matchers.guard import finish_with
 from nekro_agent.api import message
 from nekro_agent.api.plugin import ConfigBase, NekroPlugin, SandboxMethodType
 from nekro_agent.api.schemas import AgentCtx
+
 
 # 导入核心模块
 from .core.dice_engine import DiceParser, DiceRoller, DiceResult, config as dice_config
@@ -555,7 +555,7 @@ async def handle_dice_roll(
     """基础投骰指令"""
     expression = args.extract_plain_text().strip()
     if not expression:
-        await finish_with(matcher, "请输入骰子表达式，如: r 3d6+2")
+        await matcher.finish("请输入骰子表达式，如: r 3d6+2")
         return
 
     try:
@@ -593,10 +593,10 @@ async def handle_dice_roll(
         except Exception:
             pass  # 如果记录失败，不影响正常投骰
 
-        await finish_with(matcher, response)
+        await matcher.finish(response)
         return
     except ValueError as e:
-        await finish_with(matcher, f"❌ {str(e)}")
+        await matcher.finish(f"❌ {str(e)}")
         return
 
 
@@ -607,7 +607,7 @@ async def handle_hidden_roll(
     """隐藏掷骰指令"""
     expression = args.extract_plain_text().strip()
     if not expression:
-        await finish_with(matcher, "请输入骰子表达式，如: rh 3d6+2")
+        await matcher.finish("请输入骰子表达式，如: rh 3d6+2")
         return
 
     try:
@@ -620,10 +620,10 @@ async def handle_hidden_roll(
         except Exception:
             response = f"🎲 {result.format_result(show_details=False)}"
 
-        await finish_with(matcher, response)
+        await matcher.finish(response)
         return
     except ValueError as e:
-        await finish_with(matcher, f"❌ {str(e)}")
+        await matcher.finish(f"❌ {str(e)}")
         return
 
 
@@ -638,9 +638,9 @@ async def handle_advantage_roll(
 
     try:
         result = DiceRoller.roll_advantage(expression)
-        await finish_with(matcher, f"🎲 优势掷骰: {result.format_result()}")
+        await matcher.finish(f"🎲 优势掷骰: {result.format_result()}")
     except ValueError as e:
-        await finish_with(matcher, f"❌ {str(e)}")
+        await matcher.finish(f"❌ {str(e)}")
         return
 
 
@@ -655,9 +655,9 @@ async def handle_disadvantage_roll(
 
     try:
         result = DiceRoller.roll_disadvantage(expression)
-        await finish_with(matcher, f"🎲 劣势掷骰: {result.format_result()}")
+        await matcher.finish(f"🎲 劣势掷骰: {result.format_result()}")
     except ValueError as e:
-        await finish_with(matcher, f"❌ {str(e)}")
+        await matcher.finish(f"❌ {str(e)}")
         return
 
 
@@ -668,7 +668,7 @@ async def handle_character_action(
     """角色动作描述"""
     action = args.extract_plain_text().strip()
     if not action:
-        await finish_with(matcher, "请描述你的角色动作，如: me 仔细观察房间")
+        await matcher.finish("请描述你的角色动作，如: me 仔细观察房间")
         return
 
     # 获取角色信息
@@ -691,10 +691,10 @@ async def handle_character_action(
         except Exception:
             pass
 
-        await finish_with(matcher, response)
+        await matcher.finish(response)
         return
     except Exception:
-        await finish_with(matcher, f"🎭 你 {action}")
+        await matcher.finish(f"🎭 你 {action}")
         return
 
 
@@ -705,7 +705,7 @@ async def handle_skill_check(
     """技能检定"""
     skill_input = args.extract_plain_text().strip()
     if not skill_input:
-        await finish_with(matcher, "请输入技能名称，如: ra 侦察")
+        await matcher.finish("请输入技能名称，如: ra 侦察")
         return
 
     try:
@@ -754,14 +754,14 @@ async def handle_skill_check(
                 f"🎲 {character.name} 进行 {skill_name} 检定: {result.format_result()}"
             )
 
-        await finish_with(matcher, response)
+        await matcher.finish(response)
         return
     except Exception as e:
         # 检查是否是FinishedException，如果是则让它正常传播
         if "FinishedException" in str(type(e)):
             raise  # 重新抛出FinishedException
         else:
-            await finish_with(matcher, f"❌ 检定失败: {str(e)}")
+            await matcher.finish(f"❌ 检定失败: {str(e)}")
         return
 
 
@@ -801,20 +801,20 @@ async def handle_character_sheet(
                     skill_strs = [f"{k}:{v}" for k, v in skill_list]
                     response += f"🔧 技能: {' '.join(skill_strs)}..."
 
-            await finish_with(matcher, response)
+            await matcher.finish(response)
         except Exception as get_error:
             # 检查是否是FinishedException，如果是则让它正常传播
             if "FinishedException" in str(type(get_error)):
                 raise  # 重新抛出FinishedException
             else:
-                await finish_with(matcher, f"❌ 获取角色卡失败: {str(get_error)}")
+                await matcher.finish(f"❌ 获取角色卡失败: {str(get_error)}")
         return
 
     elif command.startswith("new "):
         # 创建新角色
         char_name = command[4:].strip()
         if not char_name:
-            await finish_with(matcher, "请指定角色名称")
+            await matcher.finish("请指定角色名称")
             return
 
         # 清理角色名中的特殊字符
@@ -823,7 +823,7 @@ async def handle_character_sheet(
         char_name = re.sub(r"[<>\[\]{}]", "", char_name).strip()
 
         if not char_name:
-            await finish_with(matcher, "角色名称不能为空或只包含特殊字符")
+            await matcher.finish("角色名称不能为空或只包含特殊字符")
             return
 
         try:
@@ -833,13 +833,13 @@ async def handle_character_sheet(
                 str(getattr(event, "group_id", None) or event.user_id),
                 character,
             )
-            await finish_with(matcher, f"✅ 已创建角色: {char_name}")
+            await matcher.finish(f"✅ 已创建角色: {char_name}")
         except Exception as save_error:
             # 检查是否是FinishedException，如果是则让它正常传播
             if "FinishedException" in str(type(save_error)):
                 raise  # 重新抛出FinishedException
             else:
-                await finish_with(matcher, f"❌ 保存角色失败: {str(save_error)}")
+                await matcher.finish(f"❌ 保存角色失败: {str(save_error)}")
         return
 
     elif command.startswith("temp "):
@@ -847,7 +847,7 @@ async def handle_character_sheet(
         template_name = command[5:].strip().lower()
 
         if template_name not in ["coc7", "dnd5e"]:
-            await finish_with(matcher, "❌ 支持的模板: coc7, dnd5e")
+            await matcher.finish("❌ 支持的模板: coc7, dnd5e")
             return
 
         character = await character_manager.get_character(
@@ -860,7 +860,7 @@ async def handle_character_sheet(
             str(getattr(event, "group_id", None) or event.user_id),
             character,
         )
-        await finish_with(matcher, f"✅ 已切换到 {template_name} 模板")
+        await matcher.finish(f"✅ 已切换到 {template_name} 模板")
         return
 
     elif command == "init":
@@ -880,11 +880,11 @@ async def handle_character_sheet(
             str(getattr(event, "group_id", None) or event.user_id),
             new_character,
         )
-        await finish_with(matcher, f"✅ 已自动生成角色属性: {new_character.name}")
+        await matcher.finish(f"✅ 已自动生成角色属性: {new_character.name}")
         return
 
     else:
-        await finish_with(matcher, "用法: st [show/new <名称>/temp <模板>/init]")
+        await matcher.finish("用法: st [show/new <名称>/temp <模板>/init]")
         return
 
 
@@ -897,7 +897,7 @@ async def handle_document_help(
 ):
     """文档系统帮助"""
     if not config.ENABLE_VECTOR_DB:
-        await finish_with(matcher, "❌ 文档功能未启用")
+        await matcher.finish("❌ 文档功能未启用")
         return
 
     command = args.extract_plain_text().strip()
@@ -911,7 +911,7 @@ async def handle_document_help(
             )
 
             if not documents:
-                await finish_with(matcher, "📄 暂无已上传的文档")
+                await matcher.finish("📄 暂无已上传的文档")
                 return
 
             response = "📚 已上传的文档:\n"
@@ -926,7 +926,7 @@ async def handle_document_help(
                     f"{i}. {doc_emoji} {doc['filename']} ({doc['document_type']})\n"
                 )
 
-            await finish_with(matcher, response)
+            await matcher.finish(response)
             return
 
         except Exception as e:
@@ -934,14 +934,14 @@ async def handle_document_help(
             if "FinishedException" in str(type(e)):
                 raise  # 重新抛出FinishedException
             else:
-                await finish_with(matcher, f"❌ 获取文档列表失败: {str(e)}")
+                await matcher.finish(f"❌ 获取文档列表失败: {str(e)}")
             return
 
     elif command.startswith("search "):
         # 搜索文档
         query = command[7:].strip()
         if not query:
-            await finish_with(matcher, "请输入搜索关键词")
+            await matcher.finish("请输入搜索关键词")
             return
 
         try:
@@ -952,7 +952,7 @@ async def handle_document_help(
             )
 
             if not results:
-                await finish_with(matcher, "🔍 未找到相关内容")
+                await matcher.finish("🔍 未找到相关内容")
                 return
 
             response = f'🔍 搜索 "{query}" 的结果:\n'
@@ -960,7 +960,7 @@ async def handle_document_help(
                 response += f"{i}. {result['filename']} (相似度: {int(result['score'] * 100)}%)\n"
                 response += f"   {result['text'][:100]}...\n"
 
-            await finish_with(matcher, response)
+            await matcher.finish(response)
             return
 
         except Exception as e:
@@ -968,7 +968,7 @@ async def handle_document_help(
             if "FinishedException" in str(type(e)):
                 raise  # 重新抛出FinishedException
             else:
-                await finish_with(matcher, f"❌ 搜索失败: {str(e)}")
+                await matcher.finish(f"❌ 搜索失败: {str(e)}")
             return
 
     else:
@@ -997,7 +997,7 @@ async def handle_document_help(
 
 📄 支持格式: TXT, PDF, DOCX"""
 
-        await finish_with(matcher, help_text)
+        await matcher.finish(help_text)
         return
 
 
@@ -1007,16 +1007,15 @@ async def handle_upload_text_document(
 ):
     """上传文本文档"""
     if not config.ENABLE_VECTOR_DB:
-        await finish_with(matcher, "❌ 文档功能未启用")
+        await matcher.finish("❌ 文档功能未启用")
         return
 
     content = args.extract_plain_text().strip()
     parts = content.split(" ", 2)
 
     if len(parts) < 3:
-        await finish_with(
-            matcher,
-            "用法: doc_text <类型> <文档名> <内容>\n类型: module/rule/story/background",
+        await matcher.finish(
+            "用法: doc_text <类型> <文档名> <内容>\n类型: module/rule/story/background"
         )
         return
 
@@ -1025,7 +1024,7 @@ async def handle_upload_text_document(
     text_content = parts[2]
 
     if doc_type not in ["module", "rule", "story", "background"]:
-        await finish_with(matcher, "❌ 文档类型必须是: module/rule/story/background")
+        await matcher.finish("❌ 文档类型必须是: module/rule/story/background")
         return
 
     try:
@@ -1041,9 +1040,8 @@ async def handle_upload_text_document(
         doc_emoji = {"module": "📘", "rule": "📜", "story": "📖", "background": "🌍"}[
             doc_type
         ]
-        await finish_with(
-            matcher,
-            f'✅ {doc_emoji} 文档 "{filename}" 上传成功！\n📊 已分割为 {chunk_count} 个片段',
+        await matcher.finish(
+            f'✅ {doc_emoji} 文档 "{filename}" 上传成功！\n📊 已分割为 {chunk_count} 个片段'
         )
         return
     except Exception as e:
@@ -1051,7 +1049,7 @@ async def handle_upload_text_document(
         if "FinishedException" in str(type(e)):
             raise  # 重新抛出FinishedException
         else:
-            await finish_with(matcher, f"❌ 上传失败: {str(e)}")
+            await matcher.finish(f"❌ 上传失败: {str(e)}")
         return
 
 
@@ -1061,12 +1059,12 @@ async def handle_document_qa(
 ):
     """智能文档问答"""
     if not config.ENABLE_VECTOR_DB:
-        await finish_with(matcher, "❌ 文档功能未启用")
+        await matcher.finish("❌ 文档功能未启用")
         return
 
     question = args.extract_plain_text().strip()
     if not question:
-        await finish_with(matcher, "请输入你的问题")
+        await matcher.finish("请输入你的问题")
         return
 
     try:
@@ -1076,14 +1074,14 @@ async def handle_document_qa(
             chat_key=str(getattr(event, "group_id", None) or event.user_id),
         )
 
-        await finish_with(matcher, f"🤖 AI回答:\n{answer}")
+        await matcher.finish(f"🤖 AI回答:\n{answer}")
         return
     except Exception as e:
         # 检查是否是FinishedException，如果是则让它正常传播
         if "FinishedException" in str(type(e)):
             raise  # 重新抛出FinishedException
         else:
-            await finish_with(matcher, f"❌ 问答失败: {str(e)}")
+            await matcher.finish(f"❌ 问答失败: {str(e)}")
         return
 
 
@@ -1308,13 +1306,13 @@ async def handle_daily_luck(matcher: Matcher, event: MessageEvent):
         else:
             level = "非洲人"
 
-        await finish_with(matcher, f"🍀 今日人品值: {luck_value} ({level})")
+        await matcher.finish(f"🍀 今日人品值: {luck_value} ({level})")
     except Exception as e:
         # 检查是否是FinishedException，如果是则让它正常传播
         if "FinishedException" in str(type(e)):
             raise  # 重新抛出FinishedException
         else:
-            await finish_with(matcher, f"❌ 获取人品失败: {str(e)}")
+            await matcher.finish(f"❌ 获取人品失败: {str(e)}")
 
 
 @on_command("help", priority=5, block=True).handle()
@@ -1345,7 +1343,7 @@ async def handle_help(matcher: Matcher, event: MessageEvent):
 💡 新特性: 直接上传模组PDF文件，系统会自动解析并支持智能问答！
 详细说明请使用各命令的帮助功能！"""
 
-    await finish_with(matcher, help_text)
+    await matcher.finish(help_text)
     return
 
 
@@ -1370,17 +1368,15 @@ async def handle_session(
                 chat_key, session_name
             )
             if session_name:
-                await finish_with(
-                    matcher,
-                    f"✅ 已开始记录跑团会话: {session_name}\n\n📝 所有投骰、检定和行动将自动记录\n📄 结束时使用 'session end' 生成战报",
+                await matcher.finish(
+                    f"✅ 已开始记录跑团会话: {session_name}\n\n📝 所有投骰、检定和行动将自动记录\n📄 结束时使用 'session end' 生成战报"
                 )
             else:
-                await finish_with(
-                    matcher,
-                    f"✅ 已开始记录跑团会话\n\n📝 所有投骰、检定和行动将自动记录\n📄 结束时使用 'session end' 生成战报",
+                await matcher.finish(
+                    f"✅ 已开始记录跑团会话\n\n📝 所有投骰、检定和行动将自动记录\n📄 结束时使用 'session end' 生成战报"
                 )
         except Exception as e:
-            await finish_with(matcher, f"❌ 开始记录失败: {str(e)}")
+            await matcher.finish(f"❌ 开始记录失败: {str(e)}")
         return
 
     elif command == "end":
@@ -1393,11 +1389,11 @@ async def handle_session(
             ) = await battle_report_manager.generate_battle_report(chat_key)
 
             if not text_report:
-                await finish_with(matcher, "❌ 没有正在进行的跑团会话")
+                await matcher.finish("❌ 没有正在进行的跑团会话")
                 return
 
             # 发送文本战报
-            await finish_with(matcher, text_report)
+            await matcher.finish(text_report)
 
             # 保存Markdown文档到存储
             from datetime import datetime
@@ -1418,24 +1414,24 @@ async def handle_session(
             if "FinishedException" in str(type(e)):
                 raise
             else:
-                await finish_with(matcher, f"❌ 生成战报失败: {str(e)}")
+                await matcher.finish(f"❌ 生成战报失败: {str(e)}")
         return
 
     elif command.startswith("event"):
         # 记录关键事件
         parts = command.split(maxsplit=1)
         if len(parts) < 2:
-            await finish_with(
-                matcher, "请输入事件描述，如: session event 发现了神秘的地下入口"
+            await matcher.finish(
+                "请输入事件描述，如: session event 发现了神秘的地下入口"
             )
             return
 
         description = parts[1]
         try:
             await battle_report_manager.add_key_event(chat_key, description)
-            await finish_with(matcher, f"✅ 已记录关键事件: {description}")
+            await matcher.finish(f"✅ 已记录关键事件: {description}")
         except Exception as e:
-            await finish_with(matcher, f"❌ 记录事件失败: {str(e)}")
+            await matcher.finish(f"❌ 记录事件失败: {str(e)}")
         return
 
     else:
@@ -1467,7 +1463,7 @@ session start 深海古城探险  # 开始记录
 session event 发现了神秘的地下入口  # 记录关键事件
 session end  # 生成战报"""
 
-        await finish_with(matcher, help_text)
+        await matcher.finish(help_text)
         return
 
 
