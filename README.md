@@ -253,7 +253,7 @@ AUTO_SAVE_CHARACTERS = True     # 自动保存角色数据
 
 ## 👥 作者
 
-- **Dirac** - 主要开发者
+- **johntime** --开发者
 
 ## 🙏 致谢
 
