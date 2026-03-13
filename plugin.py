@@ -128,6 +128,36 @@ register_prompt_injections(plugin, character_manager, vector_db, store, config, 
 register_enhanced_prompts(plugin, story_engine, custom_rules, rule_modeler)
 
 
+async def _set_pending_roll(chat_key: str, data: Dict[str, Union[str, int]]) -> None:
+    await store.set(store_key=f"pending_roll.{chat_key}", value=json.dumps(data, ensure_ascii=False))
+
+
+async def _get_pending_roll(chat_key: str) -> Optional[Dict[str, Union[str, int]]]:
+    raw = await store.get(store_key=f"pending_roll.{chat_key}")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+async def _clear_pending_roll(chat_key: str) -> None:
+    await store.set(store_key=f"pending_roll.{chat_key}", value="")
+
+
+async def _resolve_pending_roll(chat_key: str, expression: str) -> Optional[str]:
+    pending = await _get_pending_roll(chat_key)
+    if not pending:
+        return None
+    expected_expr = str(pending.get("expression", "")).strip().lower()
+    if expected_expr and expected_expr == expression.strip().lower():
+        reason = str(pending.get("reason", "检定"))
+        await _clear_pending_roll(chat_key)
+        return f"\n🧾 已完成检定请求：{reason}"
+    return None
+
+
 # ============ 文档上传沙盒方法 ============
 
 @plugin.mount_sandbox_method(SandboxMethodType.TOOL, "upload_document", "上传并处理文档文件")
@@ -496,6 +526,44 @@ async def get_battle_report_markdown(_ctx: AgentCtx, timestamp: str) -> str:
         return f"❌ 获取战报失败: {str(e)}"
 
 
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "request_player_roll", "创建玩家检定请求（AI不直接掷骰）")
+async def request_player_roll(
+    _ctx: AgentCtx,
+    expression: str,
+    reason: str = "场景检定",
+    check_type: str = "general"
+) -> str:
+    expr = expression.strip()
+    if not expr:
+        return "❌ 请输入骰子表达式"
+
+    pending = {
+        "expression": expr,
+        "reason": reason.strip() or "场景检定",
+        "check_type": check_type.strip() or "general",
+        "created_at": int(time.time()),
+    }
+    await _set_pending_roll(_ctx.chat_key, pending)
+    return (
+        "🎯 已创建检定请求\n"
+        f"• 目的: {pending['reason']}\n"
+        f"• 表达式: {pending['expression']}\n"
+        "请玩家使用命令投骰（例如：r <表达式> 或 ra <技能>）"
+    )
+
+
+@plugin.mount_sandbox_method(SandboxMethodType.TOOL, "get_pending_roll", "查看当前待处理检定请求")
+async def get_pending_roll(_ctx: AgentCtx) -> str:
+    pending = await _get_pending_roll(_ctx.chat_key)
+    if not pending:
+        return "📭 当前没有待处理检定请求"
+    return (
+        "📌 当前待处理检定\n"
+        f"• 目的: {pending.get('reason', '检定')}\n"
+        f"• 表达式: {pending.get('expression', '')}"
+    )
+
+
 # ============ 骰子相关命令 ============
 
 @on_command("r", priority=5, block=True).handle()
@@ -509,6 +577,10 @@ async def handle_dice_roll(matcher: Matcher, event: MessageEvent, args: Message 
     try:
         result = DiceRoller.roll_expression(expression)
         response = f"🎲 {result.format_result()}"
+        chat_key = str(getattr(event, "group_id", None) or event.user_id)
+        pending_tip = await _resolve_pending_roll(chat_key, expression)
+        if pending_tip:
+            response += pending_tip
         
         # 添加特殊效果提示
         is_critical = False
@@ -520,7 +592,6 @@ async def handle_dice_roll(matcher: Matcher, event: MessageEvent, args: Message 
             is_critical = True
         
         # 确保有活跃的战报会话
-        chat_key = str(getattr(event, "group_id", None) or event.user_id)
         await battle_report_manager.ensure_session_started(chat_key)
         
         # 记录到战报系统
@@ -557,6 +628,10 @@ async def handle_hidden_roll(matcher: Matcher, event: MessageEvent, args: Messag
     try:
         result = DiceRoller.roll_expression(expression)
         response = f"🎲 掷骰结果已私发给你"
+        chat_key = str(getattr(event, "group_id", None) or event.user_id)
+        pending_tip = await _resolve_pending_roll(chat_key, expression)
+        if pending_tip:
+            response += pending_tip
         
         # 发送结果到私聊
         try:
@@ -580,7 +655,12 @@ async def handle_advantage_roll(matcher: Matcher, event: MessageEvent, args: Mes
     
     try:
         result = DiceRoller.roll_advantage(expression)
-        await finish_with(matcher, f"🎲 优势掷骰: {result.format_result()}")
+        response = f"🎲 优势掷骰: {result.format_result()}"
+        chat_key = str(getattr(event, "group_id", None) or event.user_id)
+        pending_tip = await _resolve_pending_roll(chat_key, expression)
+        if pending_tip:
+            response += pending_tip
+        await finish_with(matcher, response)
     except ValueError as e:
         await finish_with(matcher, f"❌ {str(e)}")
         return
@@ -595,7 +675,12 @@ async def handle_disadvantage_roll(matcher: Matcher, event: MessageEvent, args: 
     
     try:
         result = DiceRoller.roll_disadvantage(expression)
-        await finish_with(matcher, f"🎲 劣势掷骰: {result.format_result()}")
+        response = f"🎲 劣势掷骰: {result.format_result()}"
+        chat_key = str(getattr(event, "group_id", None) or event.user_id)
+        pending_tip = await _resolve_pending_roll(chat_key, expression)
+        if pending_tip:
+            response += pending_tip
+        await finish_with(matcher, response)
     except ValueError as e:
         await finish_with(matcher, f"❌ {str(e)}")
         return
@@ -670,6 +755,9 @@ async def handle_skill_check(matcher: Matcher, event: MessageEvent, args: Messag
             response = (f"🎲 {character.name} 进行 {skill_name} 检定:\n"
                        f"🎯 掀出 {result['roll']} (目标值: {skill_value})\n"
                        f"✨ 结果: {result['level']}")
+            pending_tip = await _resolve_pending_roll(chat_key, f"ra {skill_name}")
+            if pending_tip:
+                response += pending_tip
             
             # 记录到战报系统
             try:
@@ -688,6 +776,9 @@ async def handle_skill_check(matcher: Matcher, event: MessageEvent, args: Messag
             # 其他系统使用基础投骰
             result = DiceRoller.roll_expression("d20")
             response = f"🎲 {character.name} 进行 {skill_name} 检定: {result.format_result()}"
+            pending_tip = await _resolve_pending_roll(chat_key, "d20")
+            if pending_tip:
+                response += pending_tip
         
         await finish_with(matcher, response)
         return
