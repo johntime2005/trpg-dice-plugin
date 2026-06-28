@@ -58,8 +58,8 @@ plugin = NekroPlugin(
     module_name="trpg_dice",
     description="完整的TRPG骰子系统，支持多种规则和复杂表达式",
     version="1.0.0",
-    author="Dirac",
-    url="https://github.com/nekro-agent/trpg-dice-plugin",
+    author="johntime",
+    url="https://github.com/johntime2005/trpg-dice-plugin",
     support_adapter=["onebot_v11", "discord"],
 )
 
