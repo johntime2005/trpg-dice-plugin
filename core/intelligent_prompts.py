@@ -5,7 +5,7 @@ async def inject_intelligent_rule_system(_ctx, rule_modeler) -> str:
     prompt = await rule_modeler.get_rule_model_prompt(_ctx.chat_key)
     if not prompt:
         return ""
-    
+
     return f"""{prompt}
 
 ## 智能判定流程

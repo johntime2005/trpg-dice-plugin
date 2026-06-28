@@ -5,7 +5,6 @@ TRPG 提示词注入模块
 """
 
 import json
-from typing import Optional, Dict, Any
 
 
 async def inject_trpg_system_prompt(_ctx) -> str:
@@ -13,7 +12,7 @@ async def inject_trpg_system_prompt(_ctx) -> str:
     TRPG系统基础提示词注入
     让AI了解可用的TRPG工具和基本角色定位
     """
-    
+
     prompt_parts = [
         "# TRPG游戏主持人助手身份",
         "",
@@ -24,7 +23,6 @@ async def inject_trpg_system_prompt(_ctx) -> str:
         "• **骰子系统**: 支持复杂表达式 (3d6+2, d100等)",
         "• **技能检定**: 自动识别技能别名，支持COC7/DND5E规则",
         "• **角色卡管理**: 多系统模板，自动属性计算",
-        "• **先攻追踪**: 战斗轮次管理",
         "• **文档检索**: 智能搜索模组、规则、背景资料",
         "• **智能问答**: 基于已上传文档回答游戏相关问题",
         "",
@@ -35,9 +33,9 @@ async def inject_trpg_system_prompt(_ctx) -> str:
         "• 在玩家命令返回结果前，不得叙述成功/失败结论",
         "• 查阅文档来提供准确的规则裁定和剧情信息",
         "• 保持沉浸感，营造合适的游戏氛围",
-        "• 公平公正地处理规则争议"
+        "• 公平公正地处理规则争议",
     ]
-    
+
     return "\n".join(prompt_parts)
 
 
@@ -46,22 +44,24 @@ async def inject_game_state_prompt(_ctx, character_manager, store) -> str:
     当前游戏状态提示词注入
     提供角色卡、先攻状态等实时游戏信息
     """
-    
+
     try:
         prompt_parts = ["# 当前游戏状态"]
-        
+
         # 获取当前活跃角色信息
         try:
             character = await character_manager.get_character(_ctx.user_id, _ctx.chat_key)
             if character:
-                prompt_parts.extend([
-                    "",
-                    f"## 当前角色: {character.name}",
-                    f"• 游戏系统: {character.system}",
-                    f"• 年龄: {getattr(character, 'age', '未知')}",
-                    f"• 职业: {getattr(character, 'occupation', '未设定')}"
-                ])
-                
+                prompt_parts.extend(
+                    [
+                        "",
+                        f"## 当前角色: {character.name}",
+                        f"• 游戏系统: {character.system}",
+                        f"• 年龄: {getattr(character, 'age', '未知')}",
+                        f"• 职业: {getattr(character, 'occupation', '未设定')}",
+                    ]
+                )
+
                 # 添加关键属性信息
                 if character.system == "CoC":
                     key_attrs = ["STR", "CON", "DEX", "INT", "SAN", "HP"]
@@ -73,36 +73,33 @@ async def inject_game_state_prompt(_ctx, character_manager, store) -> str:
                         prompt_parts.append(f"• 关键属性: {', '.join(attrs_info)}")
         except Exception:
             pass  # 忽略角色卡获取错误
-        
+
         # 检查先攻状态
         try:
             init_data = await store.get(store_key=f"initiative.{_ctx.chat_key}")
             if init_data:
                 initiative_list = json.loads(init_data)
                 if initiative_list:
-                    prompt_parts.extend([
-                        "",
-                        f"## 战斗状态: 先攻追踪中",
-                        f"• 当前先攻顺序: {len(initiative_list)}个角色",
-                        "• 使用ri命令管理先攻顺序"
-                    ])
+                    prompt_parts.extend(
+                        [
+                            "",
+                            "## 战斗状态: 先攻追踪中",
+                            f"• 当前先攻顺序: {len(initiative_list)}个角色",
+                            "• 当前版本未注册专用先攻命令，如需随机先攻请让玩家使用 r/adv/dis 投骰",
+                        ]
+                    )
         except Exception:
             pass
-        
+
         # 添加文档资料信息
         try:
             # 简化检查，实际可以调用文档管理器
-            prompt_parts.extend([
-                "",
-                "## 可用文档资料:",
-                "• 📘module:1个",
-                "• 使用文档搜索工具获取详细信息"
-            ])
+            prompt_parts.extend(["", "## 可用文档资料:", "• 使用 doc search / ask 或文档搜索工具获取详细信息"])
         except Exception:
             pass
-        
+
         return "\n".join(prompt_parts)
-        
+
     except Exception:
         return ""  # 发生错误时返回空字符串
 
@@ -112,12 +109,12 @@ async def inject_system_expertise_prompt(_ctx, character_manager) -> str:
     游戏系统专业知识提示词注入
     根据当前使用的游戏系统提供专业的KP/DM指导
     """
-    
+
     try:
         # 获取当前角色的游戏系统
         character = await character_manager.get_character(_ctx.user_id, _ctx.chat_key)
         game_system = character.system if character else "CoC"
-        
+
         if game_system == "CoC":
             return """# 克苏鲁的呼唤 (COC7) 专业指导
 
@@ -129,8 +126,7 @@ async def inject_system_expertise_prompt(_ctx, character_manager) -> str:
 
 ## 常用检定类型:
 • **技能检定**: `ra <技能名>` (支持中英文别名)
-• **理智检定**: `san <理智值> <成功损失>/<失败损失>`
-• **幸运检定**: `ra 幸运` 或直接掷骰
+• **理智/幸运/属性检定**: 当前没有专用命令时，使用 `r 1d100` 或 `ra <技能名>`，并由主持人根据角色卡和规则解释结果
 
 ## 剧情节奏控制:
 • 信息发布要循序渐进，避免一次性暴露所有真相
@@ -147,14 +143,13 @@ async def inject_system_expertise_prompt(_ctx, character_manager) -> str:
 • **探险管理**: 平衡战斗、探索、社交三大支柱
 
 ## 战斗管理:
-• **先攻追踪**: 使用ri命令管理战斗顺序
 • **优势劣势**: 使用adv/dis命令处理优势劣势
 • **环境因素**: 善用地形和环境增加战术深度
 
 ## 检定建议:
-• **能力检定**: `check <属性> <熟练>` 
-• **豁免检定**: `save <属性> <熟练>`
-• **攻击检定**: 考虑AC、掩蔽、距离等因素"""
+• **能力/豁免/攻击检定**: 使用 `r d20+修正值`
+• **优势/劣势检定**: 使用 `adv +修正值` 或 `dis +修正值`
+• **攻击裁定**: 考虑AC、掩蔽、距离等因素，但骰点必须来自玩家命令"""
 
         elif game_system == "WoD":
             return """# 黑暗世界 (WOD) 专业指导
@@ -165,7 +160,7 @@ async def inject_system_expertise_prompt(_ctx, character_manager) -> str:
 • **人性追踪**: 管理人性/道德/意志等核心属性
 
 ## 骰池系统:
-• **基础检定**: `wod <骰池> [困难度]`
+• **基础检定**: 当前没有专用 WOD 命令时，使用通用 `r <表达式>`，由主持人根据规则解释成功数
 • **专精技能**: 10点可获得额外成功
 • **大失败**: 无成功且有1点时触发"""
 
@@ -176,7 +171,7 @@ async def inject_system_expertise_prompt(_ctx, character_manager) -> str:
 • **玩家优先**: 确保所有玩家都能参与和享受游戏
 • **故事驱动**: 服务于故事发展，不拘泥于规则细节  
 • **公平裁定**: 保持一致性和公正性"""
-        
+
     except Exception:
         return ""
 
@@ -186,45 +181,35 @@ async def inject_document_context_prompt(_ctx, vector_db, enable_vector_db: bool
     文档上下文提示词注入
     根据最近的对话内容智能提取相关文档信息
     """
-    
+
     if not enable_vector_db:
         return ""
-    
+
     try:
         # 获取最近几条消息作为上下文线索
         # 这里简化实现，实际可以分析聊天历史
         recent_context = "当前游戏会话"  # 可以从_ctx获取更多上下文信息
-        
+
         # 搜索相关文档片段
-        search_results = await vector_db.search_documents(
-            query=recent_context,
-            user_id=_ctx.user_id,
-            chat_key=_ctx.chat_key,
-            limit=2
-        )
-        
+        search_results = await vector_db.search_documents(query=recent_context, chat_key=_ctx.chat_key, limit=2)
+
         if search_results:
-            prompt_parts = [
-                "# 相关背景资料",
-                "",
-                "基于当前会话上下文，以下文档可能相关:"
-            ]
-            
+            prompt_parts = ["# 相关背景资料", "", "基于当前会话上下文，以下文档可能相关:"]
+
             for i, result in enumerate(search_results, 1):
-                doc_emoji = {
-                    "module": "📘", "rule": "📜", 
-                    "story": "📖", "background": "🌍"
-                }.get(result["document_type"], "📄")
-                
-                prompt_parts.append(f"## {doc_emoji} {result['filename']} (相似度: {int(result['score']*100)}%)")
+                doc_emoji = {"module": "📘", "rule": "📜", "story": "📖", "background": "🌍"}.get(
+                    result["document_type"], "📄"
+                )
+
+                prompt_parts.append(f"## {doc_emoji} {result['filename']} (相似度: {int(result['score'] * 100)}%)")
                 prompt_parts.append(f"内容摘要: {result['text'][:200]}...")
                 prompt_parts.append("")
-            
+
             return "\n".join(prompt_parts)
-        
+
     except Exception:
         pass
-    
+
     return ""
 
 
@@ -233,7 +218,7 @@ async def inject_interaction_style_prompt(_ctx) -> str:
     TRPG交互风格提示词注入
     定义KP/DM的专业表达方式和交互模式
     """
-    
+
     return """# TRPG交互风格指导
 
 ## 叙述风格:
@@ -265,11 +250,11 @@ async def inject_session_history_prompt(_ctx, battle_report_manager) -> str:
     历史战报记忆注入
     注入上次跑团的战报摘要，作为游戏历史记忆
     """
-    
+
     try:
         # 获取上次跑团的简要总结
         summary = await battle_report_manager.get_last_session_summary(_ctx.chat_key)
-        
+
         if summary:
             return summary
         else:
@@ -281,47 +266,35 @@ async def inject_session_history_prompt(_ctx, battle_report_manager) -> str:
 
 def register_prompt_injections(plugin, character_manager, vector_db, store, config, battle_report_manager):
     """注册所有提示词注入方法"""
-    
-    @plugin.mount_prompt_inject_method(
-        name="trpg_system_awareness",
-        description="注入TRPG系统基础功能和工具意识"
-    )
+
+    @plugin.mount_prompt_inject_method(name="trpg_system_awareness", description="注入TRPG系统基础功能和工具意识")
     async def _inject_trpg_system_prompt(_ctx) -> str:
         return await inject_trpg_system_prompt(_ctx)
 
-    @plugin.mount_prompt_inject_method(
-        name="current_game_state",
-        description="注入当前游戏状态和角色信息"
-    )
+    @plugin.mount_prompt_inject_method(name="current_game_state", description="注入当前游戏状态和角色信息")
     async def _inject_game_state_prompt(_ctx) -> str:
         # 自动确保有活跃的战报记录
         await battle_report_manager.ensure_session_started(_ctx.chat_key)
         return await inject_game_state_prompt(_ctx, character_manager, store)
 
     @plugin.mount_prompt_inject_method(
-        name="game_system_expertise",
-        description="根据当前游戏系统注入专业知识和行为指导"
+        name="game_system_expertise", description="根据当前游戏系统注入专业知识和行为指导"
     )
     async def _inject_system_expertise_prompt(_ctx) -> str:
         return await inject_system_expertise_prompt(_ctx, character_manager)
 
     @plugin.mount_prompt_inject_method(
-        name="document_context_awareness", 
-        description="基于已上传文档提供上下文相关的背景信息"
+        name="document_context_awareness", description="基于已上传文档提供上下文相关的背景信息"
     )
     async def _inject_document_context_prompt(_ctx) -> str:
         return await inject_document_context_prompt(_ctx, vector_db, config.ENABLE_VECTOR_DB)
 
-    @plugin.mount_prompt_inject_method(
-        name="trpg_interaction_style",
-        description="注入TRPG特有的交互风格和表达方式"
-    )
+    @plugin.mount_prompt_inject_method(name="trpg_interaction_style", description="注入TRPG特有的交互风格和表达方式")
     async def _inject_interaction_style_prompt(_ctx) -> str:
         return await inject_interaction_style_prompt(_ctx)
-    
+
     @plugin.mount_prompt_inject_method(
-        name="session_history_memory",
-        description="注入上次跑团的战报记忆，作为游戏历史上下文"
+        name="session_history_memory", description="注入上次跑团的战报记忆，作为游戏历史上下文"
     )
     async def _inject_session_history_prompt(_ctx) -> str:
         return await inject_session_history_prompt(_ctx, battle_report_manager)
