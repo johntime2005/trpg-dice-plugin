@@ -236,6 +236,9 @@ class DiceRoller:
     @staticmethod
     def roll_advantage(expression: str) -> DiceResult:
         """优势掷骰（取较高值）"""
+        expression = expression.strip()
+        if expression and not re.search(r'd\d', expression, re.IGNORECASE):
+            expression = 'd20' + expression
         result1 = DiceRoller.roll_expression(expression)
         result2 = DiceRoller.roll_expression(expression)
         
@@ -247,6 +250,9 @@ class DiceRoller:
     @staticmethod
     def roll_disadvantage(expression: str) -> DiceResult:
         """劣势掷骰（取较低值）"""
+        expression = expression.strip()
+        if expression and not re.search(r'd\d', expression, re.IGNORECASE):
+            expression = 'd20' + expression
         result1 = DiceRoller.roll_expression(expression)
         result2 = DiceRoller.roll_expression(expression)
         
