@@ -60,7 +60,7 @@ plugin = NekroPlugin(
     version="1.0.0",
     author="johntime",
     url="https://github.com/johntime2005/trpg-dice-plugin",
-    support_adapter=["onebot_v11", "discord"],
+    support_adapter=["onebot_v11", "discord", "sse"],
 )
 
 
