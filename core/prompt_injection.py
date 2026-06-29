@@ -34,6 +34,21 @@ async def inject_trpg_system_prompt(_ctx) -> str:
         "• 查阅文档来提供准确的规则裁定和剧情信息",
         "• 保持沉浸感，营造合适的游戏氛围",
         "• 公平公正地处理规则争议",
+        "",
+        "## 命令处理规则（必须严格遵守）:",
+        "当玩家消息以以下前缀开头时，你必须立刻调用对应的工具，不要回复指南或闲聊：",
+        "• /r 或 r 开头 → 调用 handle_dice_roll 工具，expression=去掉前缀后的部分",
+        "• /adv 或 adv 开头 → 调用 handle_advantage_roll 工具",
+        "• /dis 或 dis 开头 → 调用 handle_disadvantage_roll 工具",
+        "• /coc 或 coc 开头 → 调用 handle_skill_check 工具",
+        "• /ra 或 ra 开头 → 调用 handle_skill_check 工具",
+        "• /san 或 san 开头 → 调用 handle_dice_roll 工具",
+        "• /st 或 st 开头 → 调用 handle_character_sheet 工具",
+        "• /hp 或 hp 开头 → 调用 handle_character_sheet 工具",
+        "• /name 或 name 开头 → 调用 handle_dice_roll 工具",
+        "• /jrrp 或 jrrp 开头 → 调用 handle_dice_roll 工具",
+        "• /wod 或 wod 开头 → 调用 handle_dice_roll 工具",
+        "不要解释命令用法，不要发指南，直接调用工具并返回结果。"
     ]
 
     return "\n".join(prompt_parts)
